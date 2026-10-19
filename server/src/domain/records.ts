@@ -181,7 +181,7 @@ export async function listBalanceDtos(db: Db, tenantId: string, employeeId?: str
   )
   const byEmployee = new Map<string, LeaveBalanceDto>()
   for (const b of list) {
-    const dto = byEmployee.get(b.employee_id) ?? { employeeId: b.employee_id }
+    const dto: LeaveBalanceDto = byEmployee.get(b.employee_id) ?? { employeeId: b.employee_id }
     dto[b.leave_type_code] = b.balance_days
     byEmployee.set(b.employee_id, dto)
   }
