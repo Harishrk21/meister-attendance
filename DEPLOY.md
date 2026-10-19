@@ -62,12 +62,14 @@ Allow Render egress (or `0.0.0.0/0` for staging). Prefer SSL params your host re
 
 | Setting | Value |
 |---------|--------|
-| **Root Directory** | `server` |
+| **Root Directory** | `server` ← **must be `server`, not repo root** |
 | **Runtime** | Node |
 | **Build Command** | `npm install --include=dev && npm run build` |
 | **Start Command** | `npm start` |
 | **Health Check** | `/health` |
 | **Instance** | Free (staging) |
+
+If you see `vite/client` / `tsconfig.app.json` errors on Render, the Root Directory is wrong (it’s building the SPA). Set Root to **`server`** and redeploy.
 
 ### Environment
 
