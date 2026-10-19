@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "..",
+    "noEmit": true,
+    "module": "Preserve",
+    "moduleResolution": "bundler",
+    "lib": ["ES2023", "DOM"],
+    "allowImportingTsExtensions": true,
+    "paths": {
+      "@/*": ["../src/*"]
+    }
+  },
+  "include": ["scripts", "src"]
+}

@@ -1,0 +1,39 @@
+# Blueprint: Meister Attendance API (staging / production)
+# Dashboard → New → Blueprint → connect the Attendance GitHub repo
+# https://render.com/docs/blueprint-spec
+#
+# Root of the Git repo should be the HMS_ATT folder (or set rootDir below).
+
+services:
+  - type: web
+    name: meister-attendance-api
+    runtime: node
+    plan: free
+    rootDir: server
+    buildCommand: npm install --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: PORT
+        value: 10000
+      - key: ACCESS_TOKEN_TTL
+        value: 12h
+      - key: SSO_AUDIENCE
+        value: attendance-platform
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CORS_ORIGINS
+        sync: false
+      - key: APP_URL
+        sync: false
+      # Optional: only for one-time seed on a fresh DB (omit in production after seed)
+      # - key: SEED_SSO_ISSUER
+      #   value: hms-dashboard
+      # - key: SEED_SSO_SECRET
+      #   sync: false

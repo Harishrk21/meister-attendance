@@ -1,0 +1,6 @@
+node_modules
+dist
+.env
+
+# local DB bootstrap (contains the generated password)
+sql/setup_local_db.sql

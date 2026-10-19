@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Host dashboard — embed demo</title>
+    <style>
+      * { box-sizing: border-box; }
+      body { margin: 0; font-family: system-ui, sans-serif; background: #f1f5f9; color: #0f172a; display: flex; min-height: 100vh; }
+      aside { width: 220px; background: #0f172a; color: #cbd5e1; padding: 20px 12px; flex-shrink: 0; }
+      aside h1 { font-size: 15px; color: #fff; margin: 0 8px 20px; }
+      aside button { display: block; width: 100%; text-align: left; background: none; border: 0; color: inherit; padding: 9px 10px; border-radius: 8px; font-size: 14px; cursor: pointer; }
+      aside button.active, aside button:hover { background: #1e293b; color: #fff; }
+      main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+      header { height: 56px; background: #fff; border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; padding: 0 20px; font-weight: 600; }
+      #view { flex: 1; padding: 16px; display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr) 360px; align-content: start; }
+      #view.full { display: block; padding: 0; }
+      .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; }
+      #log { font: 12px ui-monospace, monospace; max-height: 220px; overflow: auto; white-space: pre-wrap; color: #475569; }
+    </style>
+  </head>
+  <body>
+    <aside>
+      <h1>Client ERP (sample host page)</h1>
+      <button class="active" data-view="home">Home</button>
+      <button data-view="attendance">Attendance</button>
+      <button>Sales</button>
+      <button>Service tickets</button>
+    </aside>
+    <main>
+      <header id="title">Home</header>
+      <div id="view"></div>
+    </main>
+
+    <script src="/embed.js"></script>
+    <script>
+      // In production `src` is an SSO URL minted by your backend for the logged-in user:
+      //   /sso?ticket=<signed one-time JWT>&redirect=/clock
+      // In this demo the attendance app shares the browser session, so sign in on the main app first.
+      var view = document.getElementById('view')
+      var current
+
+      function log(e) {
+        var el = document.getElementById('log')
+        if (el) el.textContent = new Date().toLocaleTimeString() + '  ' + JSON.stringify(e) + '\n' + el.textContent
+      }
+
+      function show(name) {
+        if (current) current.destroy()
+        document.querySelectorAll('aside button[data-view]').forEach(function (b) {
+          b.classList.toggle('active', b.dataset.view === name)
+        })
+        document.getElementById('title').textContent = name === 'home' ? 'Home' : 'Attendance'
+        if (name === 'attendance') {
+          view.className = 'full'
+          view.innerHTML = '<div id="app" style="height:calc(100vh - 56px)"></div>'
+          current = MeisterAttendance.mount('#app', { view: 'app', height: '100%', onEvent: log })
+        } else {
+          view.className = ''
+          view.innerHTML =
+            '<div class="card"><h3 style="margin-top:0">Your ERP home</h3><p>Sales, tickets and other widgets live here. ' +
+            'The clock-in card on the right is the attendance module, embedded with one script tag.</p>' +
+            '<h4>Events from the widget</h4><div id="log">Clock in to see events…</div></div>' +
+            '<div id="clock"></div>'
+          current = MeisterAttendance.mount('#clock', { view: 'clock', onEvent: log })
+        }
+      }
+
+      document.querySelectorAll('aside button[data-view]').forEach(function (b) {
+        b.addEventListener('click', function () { show(b.dataset.view) })
+      })
+      show('home')
+    </script>
+  </body>
+</html>

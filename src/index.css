@@ -1,0 +1,204 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Sora", ui-sans-serif, system-ui, sans-serif;
+
+  --color-navy: #0b1f3a;
+  --color-navy-800: #122a4a;
+  --color-navy-700: #1a3658;
+  --color-teal: #0f766e;
+  --color-teal-600: #0d9488;
+  --color-teal-100: #ccfbf1;
+  --color-amber: #d97706;
+  --color-amber-100: #fef3c7;
+  --color-surface: #f5f7fa;
+  --color-surface-elevated: #ffffff;
+  --color-ink: #1e293b;
+  --color-ink-muted: #64748b;
+  --color-border: #e2e8f0;
+  --color-success: #059669;
+  --color-danger: #dc2626;
+  --color-warning: #d97706;
+
+  --radius-lg: 0.75rem;
+  --radius-md: 0.5rem;
+  --radius-sm: 0.375rem;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  color: var(--color-ink);
+  background: var(--color-surface);
+  -webkit-font-smoothing: antialiased;
+}
+
+.dark body, .dark {
+  color: #e2e8f0;
+  background: #0a1628;
+  --color-surface: #0a1628;
+  --color-surface-elevated: #122038;
+  --color-ink: #e2e8f0;
+  --color-ink-muted: #94a3b8;
+  --color-border: #1e3348;
+}
+
+.font-display { font-family: var(--font-display); }
+
+/* ─── Auth pages (login, invite, platform) — always light, consistent hero ─ */
+.auth-page {
+  color: #0f172a;
+  --color-surface: #f1f5f9;
+  --color-surface-elevated: #ffffff;
+  --color-ink: #0f172a;
+  --color-ink-muted: #64748b;
+  --color-border: #e2e8f0;
+  --auth-accent: #0f766e;
+}
+.auth-page-bg {
+  background:
+    radial-gradient(ellipse 90% 70% at 10% -10%, color-mix(in srgb, var(--auth-accent) 42%, transparent), transparent 55%),
+    radial-gradient(ellipse 60% 50% at 100% 0%, rgba(148, 163, 184, 0.12), transparent 50%),
+    linear-gradient(155deg, #0b1f3a 0%, #0f172a 42%, #0c4a6e 100%);
+}
+.auth-card {
+  background: #ffffff;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.06) inset,
+    0 24px 48px -12px rgba(0, 0, 0, 0.45);
+}
+.auth-logo-frame img {
+  display: block;
+}
+
+/* ─── Shell background ─────────────────────────────────────── */
+.app-shell-bg {
+  background-color: var(--color-surface);
+  background-image:
+    radial-gradient(ellipse 80% 50% at 0% -20%, rgba(15,118,110,0.12), transparent),
+    radial-gradient(ellipse 60% 40% at 100% 0%, rgba(11,31,58,0.08), transparent),
+    linear-gradient(rgba(11,31,58,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(11,31,58,0.03) 1px, transparent 1px);
+  background-size: auto, auto, 24px 24px, 24px 24px;
+}
+.dark .app-shell-bg {
+  background-image:
+    radial-gradient(ellipse 80% 50% at 0% -20%, rgba(15,118,110,0.18), transparent),
+    radial-gradient(ellipse 60% 40% at 100% 0%, rgba(13,148,136,0.08), transparent),
+    linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+  background-size: auto, auto, 24px 24px, 24px 24px;
+}
+
+/* ─── Clock hero backgrounds ───────────────────────────────── */
+.clock-bg-idle {
+  background: linear-gradient(135deg, #0b1f3a 0%, #1a3658 40%, #0f4c4a 100%);
+}
+.clock-bg-working {
+  background: linear-gradient(135deg, #064e3b 0%, #065f46 40%, #0f766e 100%);
+}
+.clock-bg-break {
+  background: linear-gradient(135deg, #78350f 0%, #92400e 40%, #b45309 100%);
+}
+.clock-bg-done {
+  background: linear-gradient(135deg, #1e3a5f 0%, #1d4ed8 50%, #2563eb 100%);
+}
+
+/* ─── Ring timer ───────────────────────────────────────────── */
+.ring-track {
+  stroke: rgba(255,255,255,0.15);
+}
+.ring-fill {
+  stroke-linecap: round;
+  transition: stroke-dashoffset 1s linear;
+}
+.ring-working { stroke: #34d399; }
+.ring-break   { stroke: #fbbf24; }
+.ring-done    { stroke: #60a5fa; }
+.ring-idle    { stroke: rgba(255,255,255,0.3); }
+
+/* ─── Animations ───────────────────────────────────────────── */
+@keyframes fade-slide-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes count-up-hint {
+  from { opacity: 0.4; transform: translateY(4px); }
+  to   { opacity: 1;   transform: translateY(0); }
+}
+@keyframes clock-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(52,211,153,0.5); }
+  50%       { box-shadow: 0 0 0 20px rgba(52,211,153,0); }
+}
+@keyframes break-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(251,191,36,0.5); }
+  50%       { box-shadow: 0 0 0 20px rgba(251,191,36,0); }
+}
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(-8px); }
+}
+@keyframes shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+@keyframes sheet-in {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.animate-sheet    { animation: sheet-in 0.25s cubic-bezier(0.32, 0.72, 0, 1) both; }
+.animate-fade     { animation: fade-in 0.2s ease-out both; }
+.animate-page     { animation: fade-slide-in 0.35s ease-out both; }
+.animate-kpi      { animation: count-up-hint 0.5s ease-out both; }
+.animate-spin-slow{ animation: spin-slow 8s linear infinite; }
+.animate-float    { animation: float 3s ease-in-out infinite; }
+
+.animate-clock-pulse { animation: clock-pulse 2s ease-in-out infinite; }
+.animate-break-pulse { animation: break-pulse 2s ease-in-out infinite; }
+
+/* shimmer text */
+.shimmer-text {
+  background: linear-gradient(90deg, #ffffff 25%, #a7f3d0 50%, #ffffff 75%);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: shimmer 3s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-sheet, .animate-fade,
+  .animate-page, .animate-kpi, .animate-spin-slow,
+  .animate-float, .animate-clock-pulse, .animate-break-pulse,
+  .shimmer-text { animation: none; -webkit-text-fill-color: white; }
+}
+
+/* ─── Focus ────────────────────────────────────────────────── */
+*:focus-visible {
+  outline: 2px solid var(--color-teal);
+  outline-offset: 2px;
+}
+
+/* ─── Print ────────────────────────────────────────────────── */
+@media print {
+  .no-print  { display: none !important; }
+  .print-only{ display: block !important; }
+  body { background: white; }
+}
