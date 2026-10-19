@@ -4,6 +4,7 @@ import { AlertCircle, Loader2 } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import { AuthCard, AuthShell } from '@/components/auth/AuthShell'
 import { postToHost } from '@/lib/embed'
+import { setHostReturnUrl } from '@/lib/hostReturn'
 
 function safeRedirect(value: string | null): string {
   if (!value || !value.startsWith('/') || value.startsWith('//') || value.startsWith('/\\')) return '/'
@@ -24,6 +25,8 @@ export function SsoPage() {
     const ticket = params.get('ticket')
     const redirect = safeRedirect(params.get('redirect'))
     const embed = params.get('embed') === '1'
+    // Meister (or any host) passes where to send the user after they finish in Attendance.
+    setHostReturnUrl(params.get('returnUrl'))
     window.history.replaceState(null, '', embed ? '/sso?embed=1' : '/sso')
 
     const exchange = ticket

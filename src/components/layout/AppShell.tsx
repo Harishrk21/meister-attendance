@@ -18,6 +18,7 @@ import {
   Sheet as SheetIcon,
   Radio,
   UserRound,
+  ArrowLeft,
 } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import { useTheme } from '@/context/ThemeContext'
@@ -28,6 +29,7 @@ import { TrackerButton } from '@/components/tracker/TrackerButton'
 import { BrandMark } from '@/components/BrandMark'
 import { useBranding } from '@/hooks/useBranding'
 import { isEmbedded } from '@/lib/embed'
+import { getHostReturnUrl, goHostReturn, clearHostReturnUrl } from '@/lib/hostReturn'
 import { cn } from '@/lib/utils'
 import type { Role } from '@/types'
 
@@ -162,6 +164,24 @@ function PageFallback() {
   )
 }
 
+function BackToDashboardButton({ className }: { className?: string }) {
+  // Read once on mount — set during /sso before AppShell appears.
+  const [hostReturn] = useState(() => getHostReturnUrl())
+  if (!hostReturn) return null
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      onClick={goHostReturn}
+      className={cn('gap-1.5 border-teal/40 text-teal hover:bg-teal/10', className)}
+    >
+      <ArrowLeft className="h-4 w-4" />
+      Back to dashboard
+    </Button>
+  )
+}
+
 export function AppShell() {
   const { session, logout } = useAuth()
   const { mode, toggle } = useTheme()
@@ -171,6 +191,7 @@ export function AppShell() {
   if (!session) return null
 
   async function handleLogout() {
+    clearHostReturnUrl()
     await logout()
     navigate('/login')
   }
@@ -206,6 +227,7 @@ export function AppShell() {
               ))}
             </nav>
             <div className="flex shrink-0 items-center gap-1">
+              <BackToDashboardButton />
               <TrackerButton />
               <NotificationBell />
             </div>
@@ -226,6 +248,9 @@ export function AppShell() {
       <aside className="no-print sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-border bg-surface-elevated lg:flex">
         <div className="flex h-14 items-center border-b border-border px-4">
           <Brand />
+        </div>
+        <div className="px-3 pt-3">
+          <BackToDashboardButton className="w-full justify-center" />
         </div>
         <SidebarNav role={session.role} />
         <div className="border-t border-border p-3">
@@ -287,6 +312,7 @@ export function AppShell() {
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
+            <BackToDashboardButton />
             <TrackerButton />
             <NotificationBell />
             {themeButton}
