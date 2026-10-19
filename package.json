@@ -8,7 +8,9 @@
     "build": "vite build",
     "typecheck": "tsc -b --noEmit",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "build:api": "npm install --include=dev --prefix server && npm run build --prefix server",
+    "start:api": "npm start --prefix server"
   },
   "dependencies": {
     "@radix-ui/react-alert-dialog": "^1.1.23",

@@ -62,14 +62,25 @@ Allow Render egress (or `0.0.0.0/0` for staging). Prefer SSL params your host re
 
 | Setting | Value |
 |---------|--------|
-| **Root Directory** | `server` ← **must be `server`, not repo root** |
-| **Runtime** | Node |
+**Preferred — Root Directory = `server`:**
+
+| Setting | Value |
+|---------|--------|
+| **Root Directory** | `server` |
 | **Build Command** | `npm install --include=dev && npm run build` |
 | **Start Command** | `npm start` |
 | **Health Check** | `/health` |
-| **Instance** | Free (staging) |
 
-If you see `vite/client` / `tsconfig.app.json` errors on Render, the Root Directory is wrong (it’s building the SPA). Set Root to **`server`** and redeploy.
+**If Root Directory is left as `.` (repo root), use these instead:**
+
+| Setting | Value |
+|---------|--------|
+| **Root Directory** | *(empty / `.`)* |
+| **Build Command** | `npm run build:api` |
+| **Start Command** | `npm run start:api` |
+| **Health Check** | `/health` |
+
+Wrong signs: build log says `hms-attendance-portal` or `vite build` → that is the **website**, not the API. API log should say `attendance-api` and `tsc`.
 
 ### Environment
 

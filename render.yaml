@@ -9,6 +9,7 @@ services:
     name: meister-attendance-api
     runtime: node
     plan: free
+    # API lives in /server — do not build the Vite SPA on Render
     rootDir: server
     buildCommand: npm install --include=dev && npm run build
     startCommand: npm start
