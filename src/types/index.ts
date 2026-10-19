@@ -102,6 +102,7 @@ export interface BreakEntry {
   id: string
   start: string
   end?: string
+  kind?: 'break' | 'lunch'
 }
 
 export interface GeoLocation {
@@ -200,6 +201,10 @@ export interface CompanySettings {
   geofenceLat?: number | null
   geofenceLng?: number | null
   geofenceRadiusM?: number
+  /** Short break allowance (minutes) — set by attendance admin. */
+  maxBreakMinutes?: number
+  /** Lunch allowance (minutes) — set by attendance admin. */
+  maxLunchMinutes?: number
   activities?: string[]
   timezone?: string
   logoUrl?: string

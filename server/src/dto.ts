@@ -71,6 +71,7 @@ export interface BreakDto {
   id: string
   start: string
   end?: string
+  kind?: 'break' | 'lunch'
 }
 
 export interface AttendanceDto {
@@ -188,6 +189,10 @@ export interface SettingsDto {
   geofenceLat?: number | null
   geofenceLng?: number | null
   geofenceRadiusM?: number
+  /** Allowed short-break length (minutes), set by attendance admin. */
+  maxBreakMinutes: number
+  /** Allowed lunch length (minutes), set by attendance admin. */
+  maxLunchMinutes: number
   timezone: string
   logoUrl?: string
   primaryColor?: string

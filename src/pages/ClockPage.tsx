@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { format, parseISO, differenceInSeconds, differenceInMinutes } from 'date-fns'
 import {
   MapPin,
@@ -7,14 +7,13 @@ import {
   LogOut,
   Loader2,
   LocateFixed,
-  Wifi,
   Monitor,
   Briefcase,
   Home,
   CheckCircle2,
   Clock as ClockIcon,
-  TimerIcon,
-  StickyNote,
+  Utensils,
+  AlertCircle,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuth } from '@/context/AuthContext'
@@ -27,67 +26,42 @@ import { captureLocation, GeoError } from '@/lib/geo'
 import { formatMinutes, cn, parseTimeToMinutes } from '@/lib/utils'
 import { DayTimeline } from '@/components/attendance/DayTimeline'
 
-/* ─── live seconds elapsed ──────────────────────────────────── */
 function useElapsed(clockIn?: string, active?: boolean) {
   const [secs, setSecs] = useState(0)
   useEffect(() => {
-    if (!clockIn || !active) { setSecs(0); return }
+    if (!clockIn || !active) {
+      setSecs(0)
+      return
+    }
     const tick = () => setSecs(differenceInSeconds(new Date(), parseISO(clockIn)))
     tick()
     const id = setInterval(tick, 1000)
     return () => clearInterval(id)
   }, [clockIn, active])
-  const h = Math.floor(secs / 3600)
-  const m = Math.floor((secs % 3600) / 60)
-  const s = secs % 60
-  return { h, m, s, total: secs }
+  return {
+    h: Math.floor(secs / 3600),
+    m: Math.floor((secs % 3600) / 60),
+    s: secs % 60,
+    total: secs,
+  }
 }
 
-/* ─── SVG ring timer ────────────────────────────────────────── */
-const R = 120
-const CIRC = 2 * Math.PI * R
-
-function RingTimer({
-  pct,
-  state,
-  children,
-}: {
-  pct: number
-  state: 'idle' | 'working' | 'break' | 'done'
-  children?: React.ReactNode
-}) {
-  const offset = CIRC - pct * CIRC
-  const ringClass = {
-    idle: 'ring-idle',
-    working: 'ring-working',
-    break: 'ring-break',
-    done: 'ring-done',
-  }[state]
-
-  return (
-    <div className="relative inline-flex items-center justify-center">
-      <svg width={280} height={280} className="rotate-[-90deg]">
-        {/* Track */}
-        <circle cx={140} cy={140} r={R} fill="none" strokeWidth={10} className="ring-track" />
-        {/* Fill */}
-        <circle
-          cx={140}
-          cy={140}
-          r={R}
-          fill="none"
-          strokeWidth={10}
-          strokeDasharray={CIRC}
-          strokeDashoffset={offset}
-          className={cn('ring-fill', ringClass)}
-          style={{ transition: 'stroke-dashoffset 1s linear' }}
-        />
-      </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center">{children}</div>
-    </div>
-  )
+function useNow(active: boolean) {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    if (!active) return
+    const id = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(id)
+  }, [active])
+  return now
 }
 
-/* ─── Main component ─────────────────────────────────────────── */
+const WORK_MODES: { mode: WorkMode; icon: typeof Monitor; label: string }[] = [
+  { mode: 'Office', icon: Monitor, label: 'Office' },
+  { mode: 'Field', icon: Briefcase, label: 'Field' },
+  { mode: 'WFH', icon: Home, label: 'WFH' },
+]
+
 export function ClockPage() {
   const { session } = useAuth()
   const { bump, data } = useData()
@@ -98,49 +72,46 @@ export function ClockPage() {
   const [earlyNote, setEarlyNote] = useState('')
   const [busy, setBusy] = useState(false)
   const [locBadge, setLocBadge] = useState(false)
-  const [showNotes, setShowNotes] = useState(false)
   const noteRef = useRef<HTMLTextAreaElement>(null)
 
   const active = !!(record?.clockIn && !record.clockOut)
   const done = !!(record?.clockOut)
   const onBreak = !!(record?.isOnBreak)
+  const elapsed = useElapsed(record?.clockIn, active && !onBreak)
+  const now = useNow(active)
 
-  const clockState: 'idle' | 'working' | 'break' | 'done' =
-    done ? 'done' : onBreak ? 'break' : active ? 'working' : 'idle'
+  const emp = data?.employees.find((e) => e.id === session?.employeeId)
+  const shift = data?.shifts.find((s) => s.id === emp?.shiftId) ?? data?.shifts[0]
+  const maxBreak = data?.settings.maxBreakMinutes ?? 20
+  const maxLunch = data?.settings.maxLunchMinutes ?? 30
+  const requireEarly = data?.settings.requireNoteForEarlyLeave !== false
 
-  const elapsed = useElapsed(record?.clockIn, active)
+  const openBreak = record?.breaks.find((b) => !b.end)
+  const openKind = openBreak?.kind === 'lunch' ? 'lunch' : 'break'
+  const openAllowance = openKind === 'lunch' ? maxLunch : maxBreak
+  const openBreakSecs = openBreak
+    ? Math.max(0, Math.floor((now - parseISO(openBreak.start).getTime()) / 1000))
+    : 0
+  const openBreakMins = Math.floor(openBreakSecs / 60)
+  const overAllowance = onBreak && openBreakMins >= openAllowance
 
-  /* shift progress % */
-  const shiftPct = (() => {
-    if (!session || !data) return 0
-    const emp = data.employees.find((e) => e.id === session.employeeId)
-    const shift = data.shifts.find((s) => s.id === emp?.shiftId) ?? data.shifts[0]
-    if (!shift) return 0
-    const startMin = parseTimeToMinutes(shift.start)
-    const endMin = parseTimeToMinutes(shift.end)
-    const nowMin = new Date().getHours() * 60 + new Date().getMinutes()
-    return Math.min(1, Math.max(0, (nowMin - startMin) / (endMin - startMin)))
-  })()
+  const beforeShiftEnd = useMemo(() => {
+    if (!shift) return false
+    const mins = new Date(now).getHours() * 60 + new Date(now).getMinutes()
+    return mins < parseTimeToMinutes(shift.end)
+  }, [shift, now])
 
-  /* ring pct: while working = shift progress, break = amber constant, done = 1 */
-  const ringPct = done ? 1 : onBreak ? 0.5 : active ? shiftPct : 0
-
-  async function reload() {
-    if (!session) return
-    const r = await attendanceService.getTodayRecord(session.employeeId)
-    setRecord(r)
-    if (r?.workMode) setWorkMode(r.workMode)
-  }
+  const lunchTaken = !!record?.breaks.some((b) => b.kind === 'lunch')
 
   useEffect(() => {
-    void reload()
+    if (!session) return
+    void attendanceService.getTodayRecord(session.employeeId).then(setRecord)
     const id = setInterval(() => {
-      if (session && active) {
-        void attendanceService.refreshLiveMinutes(session.employeeId).then((r) => { if (r) setRecord(r) })
-      }
-    }, 30000)
+      void attendanceService.refreshLiveMinutes(session.employeeId).then((r) => {
+        if (r) setRecord(r)
+      })
+    }, 30_000)
     return () => clearInterval(id)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.employeeId, data])
 
   if (!session) return null
@@ -161,7 +132,7 @@ export function ClockPage() {
       })
       setRecord(r)
       bump()
-      toast.success(r.status === 'Late' ? '⏰ Clocked in — marked Late' : '✅ Clocked in successfully!')
+      toast.success(r.status === 'Late' ? 'Clocked in — marked Late' : 'Clocked in')
     } catch (e) {
       toast.error(e instanceof GeoError || e instanceof Error ? e.message : 'Clock-in failed')
     } finally {
@@ -171,6 +142,10 @@ export function ClockPage() {
 
   async function handleClockOut() {
     if (!session) return
+    if (requireEarly && beforeShiftEnd && !earlyNote.trim()) {
+      toast.error('Enter an early leave reason — you are clocking out before shift end')
+      return
+    }
     setBusy(true)
     try {
       const r = await attendanceService.clockOut({
@@ -179,7 +154,7 @@ export function ClockPage() {
       })
       setRecord(r)
       bump()
-      toast.success('👋 Clocked out — have a great evening!')
+      toast.success('Clocked out')
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Clock-out failed')
     } finally {
@@ -187,16 +162,25 @@ export function ClockPage() {
     }
   }
 
-  async function handleBreak(start: boolean) {
+  async function handleBreak(start: boolean, kind: 'break' | 'lunch' = 'break') {
     if (!session) return
     setBusy(true)
     try {
-      const r = start
-        ? await attendanceService.startBreak(session.employeeId)
-        : await attendanceService.endBreak(session.employeeId)
-      setRecord(r)
+      if (start) {
+        const r = await attendanceService.startBreak(session.employeeId, kind)
+        setRecord(r)
+        toast.success(kind === 'lunch' ? `Lunch started (${maxLunch} min allowance)` : `Break started (${maxBreak} min allowance)`)
+      } else {
+        if (overAllowance) {
+          toast.warning(
+            `${openKind === 'lunch' ? 'Lunch' : 'Break'} ran over the ${openAllowance} min allowance`
+          )
+        }
+        const r = await attendanceService.endBreak(session.employeeId)
+        setRecord(r)
+        toast.success('Back to work')
+      }
       bump()
-      toast.success(start ? '☕ Break started' : '💪 Back to work!')
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Break update failed')
     } finally {
@@ -204,349 +188,301 @@ export function ClockPage() {
     }
   }
 
-  /* formatted elapsed */
-  const { h, m, s } = elapsed
-  const hh = String(h).padStart(2, '0')
-  const mm = String(m).padStart(2, '0')
-  const ss = String(s).padStart(2, '0')
-
-  /* hero gradient */
-  const heroCls = {
-    idle:    'clock-bg-idle',
-    working: 'clock-bg-working',
-    break:   'clock-bg-break',
-    done:    'clock-bg-done',
-  }[clockState]
-
-  /* status label */
-  const statusLabel = {
-    idle:    'Not clocked in',
-    working: onBreak ? 'On Break' : `Working — ${workMode}`,
-    break:   'On Break',
-    done:    'Day Complete',
-  }[clockState]
-
-  /* pulse class on ring */
-  const pulseCls = clockState === 'working' && !onBreak
-    ? 'animate-clock-pulse'
-    : clockState === 'break'
-      ? 'animate-break-pulse'
-      : ''
+  const hh = String(elapsed.h).padStart(2, '0')
+  const mm = String(elapsed.m).padStart(2, '0')
+  const ss = String(elapsed.s).padStart(2, '0')
+  const statusText = done
+    ? 'Day complete'
+    : onBreak
+      ? openKind === 'lunch'
+        ? 'On lunch'
+        : 'On break'
+      : active
+        ? 'Working'
+        : 'Not clocked in'
 
   return (
-    <div className="animate-page">
-      {/* ── Hero section ── */}
-      <div className={cn('relative overflow-hidden rounded-3xl shadow-2xl', heroCls)}>
-        {/* decorative blobs */}
-        <div className="pointer-events-none absolute -left-20 -top-20 h-64 w-64 rounded-full bg-white/5 blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-20 -right-20 h-80 w-80 rounded-full bg-white/5 blur-3xl" />
-
-        <div className="relative px-4 py-8 sm:px-8 sm:py-10">
-          {/* top bar */}
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.15em] text-white/60">
-                {format(new Date(), 'EEEE, d MMMM yyyy')}
-              </p>
-              <h1 className="font-display text-2xl font-bold text-white">
-                {session.name.split(' ')[0]}'s Time Clock
-              </h1>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {record?.status && record.clockIn && (
-                <span
-                  className={cn(
-                    'rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wider',
-                    record.status === 'Late'
-                      ? 'bg-red-500/30 text-red-200'
-                      : 'bg-emerald-500/30 text-emerald-200'
-                  )}
-                >
-                  {record.status}
-                </span>
-              )}
-              {(record?.location || locBadge) && (
-                <span className="flex items-center gap-1 rounded-full bg-white/15 px-3 py-1 text-xs font-semibold text-white">
-                  <LocateFixed className="h-3 w-3" /> GPS
-                </span>
-              )}
-            </div>
-          </div>
-
-          {/* Ring + Clock */}
-          <div className="mt-6 flex flex-col items-center gap-4">
-            <div className={cn('rounded-full', pulseCls)}>
-              <RingTimer pct={ringPct} state={clockState === 'working' && onBreak ? 'break' : clockState}>
-                <div className="flex flex-col items-center">
-                  {/* digital clock */}
-                  <div className="flex items-end gap-1">
-                    <span
-                      className={cn(
-                        'font-display text-5xl font-black tabular-nums tracking-tight sm:text-6xl',
-                        active && !onBreak ? 'shimmer-text' : 'text-white'
-                      )}
-                    >
-                      {active ? `${hh}:${mm}` : '00:00'}
-                    </span>
-                    {active && (
-                      <span className="mb-1 font-display text-xl font-bold tabular-nums text-white/60">
-                        :{ss}
-                      </span>
-                    )}
-                  </div>
-                  <p className="mt-1 text-xs font-semibold uppercase tracking-wider text-white/60">
-                    {active ? 'elapsed' : 'not started'}
-                  </p>
-                  <div
-                    className={cn(
-                      'mt-2 rounded-full px-3 py-0.5 text-[11px] font-bold uppercase tracking-wider',
-                      clockState === 'working' && !onBreak ? 'bg-emerald-400/30 text-emerald-200' :
-                      clockState === 'break' || onBreak ? 'bg-amber-400/30 text-amber-200' :
-                      clockState === 'done' ? 'bg-blue-400/30 text-blue-200' :
-                      'bg-white/20 text-white/60'
-                    )}
-                  >
-                    {statusLabel}
-                  </div>
-                </div>
-              </RingTimer>
-            </div>
-
-            {/* Shift progress bar */}
-            {(active || done) && (
-              <div className="w-full max-w-xs">
-                <div className="mb-1 flex justify-between text-[11px] text-white/50">
-                  <span>Shift start</span>
-                  <span>{Math.round(shiftPct * 100)}% of shift</span>
-                  <span>Shift end</span>
-                </div>
-                <div className="h-2 w-full overflow-hidden rounded-full bg-white/15">
-                  <div
-                    className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-teal-300 transition-all duration-1000"
-                    style={{ width: `${Math.round(shiftPct * 100)}%` }}
-                  />
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Stats row */}
-          {record?.clockIn && (
-            <div className="mt-6 grid grid-cols-3 gap-2 sm:gap-4">
-              {[
-                { icon: ClockIcon,  label: 'Clocked in',  val: format(parseISO(record.clockIn), 'hh:mm a') },
-                { icon: TimerIcon,  label: 'Work time',   val: formatMinutes(record.totalWorkMinutes) },
-                { icon: Coffee,     label: 'Break time',  val: formatMinutes(record.totalBreakMinutes) },
-              ].map(({ icon: Icon, label, val }) => (
-                <div key={label} className="rounded-2xl bg-white/10 p-3 text-center backdrop-blur-sm">
-                  <Icon className="mx-auto h-4 w-4 text-white/60" />
-                  <div className="mt-1 font-display text-lg font-bold text-white tabular-nums">{val}</div>
-                  <div className="text-[10px] text-white/50">{label}</div>
-                </div>
-              ))}
-            </div>
+    <div className="mx-auto max-w-lg animate-page space-y-4">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-medium uppercase tracking-wide text-ink-muted">
+            {format(new Date(), 'EEEE, d MMM yyyy')}
+          </p>
+          <h1 className="font-display text-xl font-semibold text-ink">Time clock</h1>
+          {shift && (
+            <p className="mt-0.5 text-xs text-ink-muted">
+              Shift {shift.start} – {shift.end}
+              {requireEarly ? ' · Early leave needs a reason' : ''}
+            </p>
           )}
-
-          {/* Clock out time */}
-          {record?.clockOut && (
-            <div className="mt-3 text-center text-sm text-white/60">
-              Clocked out at <span className="font-bold text-white">{format(parseISO(record.clockOut), 'hh:mm a')}</span>
-            </div>
+        </div>
+        <div className="flex flex-wrap justify-end gap-1.5">
+          <span
+            className={cn(
+              'rounded-md px-2 py-1 text-[11px] font-semibold',
+              done
+                ? 'bg-sky-50 text-sky-800 dark:bg-sky-950/40 dark:text-sky-200'
+                : onBreak
+                  ? 'bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-200'
+                  : active
+                    ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200'
+                    : 'bg-surface-elevated text-ink-muted'
+            )}
+          >
+            {statusText}
+          </span>
+          {record?.status && record.clockIn && (
+            <span
+              className={cn(
+                'rounded-md px-2 py-1 text-[11px] font-semibold',
+                record.status === 'Late'
+                  ? 'bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-200'
+                  : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-200'
+              )}
+            >
+              {record.status}
+            </span>
+          )}
+          {(record?.location || locBadge) && (
+            <span className="inline-flex items-center gap-1 rounded-md bg-surface-elevated px-2 py-1 text-[11px] font-medium text-ink-muted">
+              <LocateFixed className="h-3 w-3" /> GPS
+            </span>
           )}
         </div>
       </div>
 
-      {/* ── Controls ── */}
-      <div className="mt-4 space-y-4">
-
-        {/* Work mode selector (only before clock-in) */}
-        {!active && !done && (
-          <div className="rounded-2xl border border-border bg-surface-elevated p-4 shadow-sm">
-            <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-ink-muted">
-              Work mode
-            </p>
-            <div className="grid grid-cols-3 gap-3">
-              {(['Office', 'Field', 'WFH'] as WorkMode[]).map((m) => {
-                const cfg = {
-                  Office: { icon: Monitor, label: 'Office', grad: 'from-blue-500 to-blue-600', glow: 'shadow-blue-200' },
-                  Field:  { icon: Briefcase, label: 'Field', grad: 'from-emerald-500 to-teal-600', glow: 'shadow-emerald-200' },
-                  WFH:    { icon: Home, label: 'WFH', grad: 'from-purple-500 to-indigo-600', glow: 'shadow-purple-200' },
-                }[m]
-                const sel = workMode === m
-                return (
-                  <button
-                    key={m}
-                    type="button"
-                    onClick={() => setWorkMode(m)}
-                    className={cn(
-                      'relative flex flex-col items-center gap-2 rounded-2xl border-2 py-4 text-sm font-semibold transition-all duration-200',
-                      sel
-                        ? `bg-gradient-to-br ${cfg.grad} border-transparent text-white shadow-lg ${cfg.glow}`
-                        : 'border-border bg-surface text-ink-muted hover:border-teal/50 hover:text-ink'
-                    )}
-                  >
-                    <cfg.icon className="h-6 w-6" />
-                    {cfg.label}
-                    {sel && (
-                      <CheckCircle2 className="absolute -right-1.5 -top-1.5 h-5 w-5 rounded-full bg-white text-emerald-600 shadow" />
-                    )}
-                  </button>
-                )
-              })}
+      {/* Primary actions — top */}
+      <div className="rounded-xl border border-border bg-surface-elevated p-3 shadow-sm">
+        {!done && !active && (
+          <div className="space-y-3">
+            <div className="grid grid-cols-3 gap-2">
+              {WORK_MODES.map(({ mode, icon: Icon, label }) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => setWorkMode(mode)}
+                  className={cn(
+                    'flex flex-col items-center gap-1 rounded-lg border px-2 py-2.5 text-xs font-semibold transition',
+                    workMode === mode
+                      ? 'border-teal bg-teal/10 text-teal'
+                      : 'border-border text-ink-muted hover:border-teal/40 hover:text-ink'
+                  )}
+                >
+                  <Icon className="h-4 w-4" />
+                  {label}
+                </button>
+              ))}
             </div>
-          </div>
-        )}
-
-        {/* Note toggle */}
-        {!active && !done && (
-          <button
-            type="button"
-            onClick={() => { setShowNotes((v) => !v); setTimeout(() => noteRef.current?.focus(), 50) }}
-            className="flex w-full items-center gap-2 rounded-xl border border-border bg-surface-elevated px-4 py-3 text-sm text-ink-muted transition hover:border-teal/50 hover:text-ink"
-          >
-            <StickyNote className="h-4 w-4" />
-            {notes ? `Note: "${notes.slice(0, 40)}${notes.length > 40 ? '…' : ''}"` : 'Add a note (optional)'}
-          </button>
-        )}
-        {!active && !done && showNotes && (
-          <textarea
-            ref={noteRef}
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder="First call / site visit…"
-            rows={2}
-            className="w-full rounded-xl border border-border bg-surface-elevated px-4 py-3 text-sm text-ink placeholder:text-ink-muted focus:outline-none focus:ring-2 focus:ring-teal"
-          />
-        )}
-
-        {/* Early leave note (while clocked in) */}
-        {active && (
-          <div className="rounded-2xl border border-border bg-surface-elevated p-4 shadow-sm">
-            <Label htmlFor="early" className="text-xs font-semibold uppercase tracking-wider text-ink-muted">
-              Early leave note (required if leaving before shift end)
-            </Label>
             <Textarea
-              id="early"
-              value={earlyNote}
-              onChange={(e) => setEarlyNote(e.target.value)}
-              placeholder="Reason for leaving early…"
-              className="mt-2"
+              ref={noteRef}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Optional note…"
+              rows={2}
+              className="text-sm"
             />
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void handleClockIn()}
+              className="flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-teal text-sm font-semibold text-white transition hover:bg-teal/90 disabled:opacity-60"
+            >
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />}
+              Clock in
+            </button>
           </div>
         )}
 
-        {/* Action buttons */}
-        {!done && (
-          <div className={cn('grid gap-3', active ? 'grid-cols-2' : 'grid-cols-1')}>
-            {!active && (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void handleClockIn()}
-                className={cn(
-                  'group relative flex h-20 w-full items-center justify-center gap-3 overflow-hidden rounded-2xl text-xl font-black text-white shadow-2xl transition-all duration-200 active:scale-95 disabled:opacity-60',
-                  'bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 shadow-emerald-300/50 hover:shadow-emerald-400/70 hover:brightness-110'
-                )}
-              >
-                <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-white/0 via-white/10 to-white/0 opacity-0 transition-opacity group-hover:opacity-100" />
-                {busy ? <Loader2 className="h-7 w-7 animate-spin" /> : <LogIn className="h-7 w-7" />}
-                Clock In
-              </button>
+        {active && (
+          <div className="space-y-3">
+            {requireEarly && beforeShiftEnd && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50/80 p-3 dark:border-amber-900/40 dark:bg-amber-950/20">
+                <Label htmlFor="early" className="flex items-center gap-1.5 text-xs font-semibold text-amber-900 dark:text-amber-200">
+                  <AlertCircle className="h-3.5 w-3.5" />
+                  Early leave reason (required before {shift?.end ?? 'shift end'})
+                </Label>
+                <Textarea
+                  id="early"
+                  value={earlyNote}
+                  onChange={(e) => setEarlyNote(e.target.value)}
+                  placeholder="Why are you leaving early?"
+                  className="mt-2 border-amber-200 bg-white dark:border-amber-900/40"
+                  rows={2}
+                />
+              </div>
             )}
 
-            {active && (
-              <>
-                {!onBreak ? (
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => void handleBreak(true)}
-                    className="group flex h-20 items-center justify-center gap-2 rounded-2xl bg-gradient-to-br from-amber-400 via-orange-500 to-amber-600 text-lg font-bold text-white shadow-xl shadow-amber-300/40 transition-all hover:brightness-110 active:scale-95 disabled:opacity-60"
-                  >
-                    {busy ? <Loader2 className="h-6 w-6 animate-spin" /> : <Coffee className="h-6 w-6" />}
-                    Break
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => void handleBreak(false)}
-                    className="group flex h-20 items-center justify-center gap-2 rounded-2xl bg-gradient-to-br from-emerald-400 via-teal-500 to-emerald-600 text-lg font-bold text-white shadow-xl shadow-emerald-300/40 transition-all hover:brightness-110 active:scale-95 disabled:opacity-60"
-                  >
-                    {busy ? <Loader2 className="h-6 w-6 animate-spin" /> : <Coffee className="h-6 w-6" />}
-                    Resume
-                  </button>
-                )}
-
+            {!onBreak ? (
+              <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
                   disabled={busy}
-                  onClick={() => void handleClockOut()}
-                  className="group flex h-20 items-center justify-center gap-2 rounded-2xl bg-gradient-to-br from-red-500 via-rose-500 to-red-600 text-lg font-bold text-white shadow-xl shadow-red-300/40 transition-all hover:brightness-110 active:scale-95 disabled:opacity-60"
+                  onClick={() => void handleBreak(true, 'break')}
+                  className="flex h-11 items-center justify-center gap-1.5 rounded-lg border border-border bg-surface text-sm font-semibold text-ink transition hover:bg-surface-elevated disabled:opacity-60"
                 >
-                  {busy ? <Loader2 className="h-6 w-6 animate-spin" /> : <LogOut className="h-6 w-6" />}
-                  Clock Out
+                  <Coffee className="h-4 w-4 text-amber-600" />
+                  Break ({maxBreak}m)
                 </button>
-              </>
+                <button
+                  type="button"
+                  disabled={busy || lunchTaken}
+                  onClick={() => void handleBreak(true, 'lunch')}
+                  className="flex h-11 items-center justify-center gap-1.5 rounded-lg border border-border bg-surface text-sm font-semibold text-ink transition hover:bg-surface-elevated disabled:opacity-60"
+                  title={lunchTaken ? 'Lunch already taken today' : undefined}
+                >
+                  <Utensils className="h-4 w-4 text-orange-600" />
+                  Lunch ({maxLunch}m)
+                </button>
+              </div>
+            ) : (
+              <div className="rounded-lg border border-amber-200 bg-amber-50/70 px-3 py-2 text-center text-xs dark:border-amber-900/40 dark:bg-amber-950/20">
+                <span className="font-semibold text-amber-900 dark:text-amber-200">
+                  {openKind === 'lunch' ? 'Lunch' : 'Break'}: {Math.floor(openBreakSecs / 60)}:
+                  {String(openBreakSecs % 60).padStart(2, '0')}
+                </span>
+                <span className="text-amber-800/80 dark:text-amber-300/80">
+                  {' '}
+                  / {openAllowance} min
+                  {overAllowance ? ' — over allowance' : ''}
+                </span>
+              </div>
+            )}
+
+            <div className={cn('grid gap-2', onBreak ? 'grid-cols-2' : 'grid-cols-1')}>
+              {onBreak && (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void handleBreak(false)}
+                  className="flex h-12 items-center justify-center gap-2 rounded-lg border border-teal/40 bg-teal/10 text-sm font-semibold text-teal transition hover:bg-teal/15 disabled:opacity-60"
+                >
+                  {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Coffee className="h-4 w-4" />}
+                  End {openKind === 'lunch' ? 'lunch' : 'break'}
+                </button>
+              )}
+              <button
+                type="button"
+                disabled={busy || onBreak}
+                onClick={() => void handleClockOut()}
+                className="flex h-12 items-center justify-center gap-2 rounded-lg bg-ink text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
+              >
+                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogOut className="h-4 w-4" />}
+                Clock out
+              </button>
+            </div>
+            {onBreak && (
+              <p className="text-center text-[11px] text-ink-muted">End your break before clocking out</p>
             )}
           </div>
         )}
 
-        {/* Done card */}
         {done && (
-          <div className="flex flex-col items-center gap-3 rounded-2xl border border-blue-200 bg-blue-50 p-6 text-center dark:border-blue-900/40 dark:bg-blue-950/20">
-            <CheckCircle2 className="h-12 w-12 text-blue-500" />
+          <div className="flex items-center gap-3 py-2">
+            <CheckCircle2 className="h-8 w-8 shrink-0 text-sky-600" />
             <div>
-              <p className="font-display text-lg font-bold text-navy dark:text-white">Day complete!</p>
-              <p className="mt-1 text-sm text-ink-muted">
-                You worked <span className="font-bold text-navy dark:text-white">{formatMinutes(record?.totalWorkMinutes ?? 0)}</span> today.
+              <p className="text-sm font-semibold text-ink">Day complete</p>
+              <p className="text-xs text-ink-muted">
+                Worked {formatMinutes(record?.totalWorkMinutes ?? 0)}
+                {record?.clockOut
+                  ? ` · Out ${format(parseISO(record.clockOut), 'hh:mm a')}`
+                  : ''}
               </p>
             </div>
           </div>
         )}
-
-        {/* Geo note */}
-        <p className="flex items-center gap-2 text-center text-xs text-ink-muted">
-          <MapPin className="h-3.5 w-3.5 shrink-0" />
-          {data?.settings.geofenceEnabled
-            ? `Office GPS check is on — you must be within ${data.settings.geofenceRadiusM ?? 10} m to clock in.`
-            : 'Location is optional — clock-in does not require GPS for this company.'}
-          <Wifi className="h-3.5 w-3.5 shrink-0" />
-        </p>
       </div>
 
-      {/* Day timeline — Attendify-style */}
-      {record?.clockIn && (
-        <div className="mt-4">
-          <DayTimeline record={record} />
+      {/* Compact timer card */}
+      <div className="rounded-xl border border-border bg-surface-elevated p-5 shadow-sm">
+        <div className="flex items-end justify-between gap-4">
+          <div>
+            <p className="text-[11px] font-medium uppercase tracking-wide text-ink-muted">
+              {active && !onBreak ? 'Worked today' : onBreak ? 'Paused' : done ? 'Total work' : 'Ready'}
+            </p>
+            <p className="mt-1 font-display text-4xl font-semibold tabular-nums tracking-tight text-ink">
+              {active || done ? `${hh}:${mm}` : '00:00'}
+              {(active || done) && (
+                <span className="ml-1 text-lg font-medium text-ink-muted">:{ss}</span>
+              )}
+            </p>
+          </div>
+          <div className="text-right text-xs text-ink-muted">
+            {record?.clockIn && (
+              <div className="flex items-center justify-end gap-1">
+                <ClockIcon className="h-3.5 w-3.5" />
+                In {format(parseISO(record.clockIn), 'hh:mm a')}
+              </div>
+            )}
+            <div className="mt-1">Break {formatMinutes(record?.totalBreakMinutes ?? 0)}</div>
+          </div>
         </div>
-      )}
 
-      {/* ── Breaks log ── */}
+        {(active || done) && shift && (
+          <div className="mt-4">
+            <div className="mb-1 flex justify-between text-[10px] text-ink-muted">
+              <span>{shift.start}</span>
+              <span>Shift progress</span>
+              <span>{shift.end}</span>
+            </div>
+            <div className="h-1.5 overflow-hidden rounded-full bg-surface">
+              <div
+                className="h-full rounded-full bg-teal transition-all duration-700"
+                style={{
+                  width: `${Math.min(
+                    100,
+                    Math.round(
+                      (() => {
+                        const startMin = parseTimeToMinutes(shift.start)
+                        const endMin = parseTimeToMinutes(shift.end)
+                        const span = Math.max(1, endMin - startMin)
+                        const nowMin = new Date(now).getHours() * 60 + new Date(now).getMinutes()
+                        return ((nowMin - startMin) / span) * 100
+                      })()
+                    )
+                  )}%`,
+                }}
+              />
+            </div>
+          </div>
+        )}
+      </div>
+
+      <p className="flex items-start gap-2 text-xs text-ink-muted">
+        <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+        {data?.settings.geofenceEnabled
+          ? `GPS required — within ${data.settings.geofenceRadiusM ?? 10} m of the office.`
+          : 'GPS optional for this company.'}
+        {' · '}
+        Short break {maxBreak}m · Lunch {maxLunch}m (admin settings)
+      </p>
+
+      {record?.clockIn && <DayTimeline record={record} />}
+
       {record?.breaks && record.breaks.length > 0 && (
-        <div className="mt-4 rounded-2xl border border-border bg-surface-elevated p-4 shadow-sm">
-          <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-ink-muted">Today's breaks</p>
+        <div className="rounded-xl border border-border bg-surface-elevated p-4">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-muted">
+            Breaks today
+          </p>
           <div className="space-y-2">
             {record.breaks.map((b, i) => {
               const dur = b.end
                 ? differenceInMinutes(parseISO(b.end), parseISO(b.start))
                 : differenceInMinutes(new Date(), parseISO(b.start))
+              const kind = b.kind === 'lunch' ? 'Lunch' : 'Break'
               return (
                 <div
                   key={b.id}
-                  className="flex items-center justify-between rounded-xl bg-amber-50 px-4 py-2.5 dark:bg-amber-950/20"
+                  className="flex items-center justify-between rounded-lg bg-surface px-3 py-2 text-sm"
                 >
-                  <div className="flex items-center gap-2 text-sm font-medium text-amber-800 dark:text-amber-300">
-                    <Coffee className="h-4 w-4" />
-                    Break {i + 1}
-                  </div>
-                  <div className="text-right text-sm tabular-nums text-ink-muted">
+                  <span className="font-medium text-ink">
+                    {kind} {i + 1}
+                  </span>
+                  <span className="tabular-nums text-ink-muted">
                     {format(parseISO(b.start), 'HH:mm')}
-                    {b.end ? ` – ${format(parseISO(b.end), 'HH:mm')}` : ' – ongoing'}
-                    <span className="ml-2 rounded bg-amber-200 px-1.5 py-0.5 text-xs font-bold text-amber-800 dark:bg-amber-800/40 dark:text-amber-200">
-                      {dur}m
-                    </span>
-                  </div>
+                    {b.end ? ` – ${format(parseISO(b.end), 'HH:mm')}` : ' – now'}
+                    <span className="ml-2 font-semibold text-ink">{dur}m</span>
+                  </span>
                 </div>
               )
             })}

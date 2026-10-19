@@ -169,15 +169,26 @@ export async function clockOut(params: {
   return updated
 }
 
-export async function startBreak(employeeId: string): Promise<AttendanceRecord> {
-  if (isApiMode) return apiFetch<AttendanceRecord>('/v1/attendance/breaks/start', { method: 'POST' })
+export async function startBreak(
+  employeeId: string,
+  kind: 'break' | 'lunch' = 'break'
+): Promise<AttendanceRecord> {
+  if (isApiMode) {
+    return apiFetch<AttendanceRecord>('/v1/attendance/breaks/start', {
+      method: 'POST',
+      body: { kind },
+    })
+  }
   let updated!: AttendanceRecord
   await updateAppData((data) => {
     const date = todayStr()
     const rec = data.attendance.find((a) => a.employeeId === employeeId && a.date === date && a.clockIn && !a.clockOut)
     if (!rec) throw new Error('Clock in first')
     if (rec.isOnBreak) throw new Error('Already on break')
-    rec.breaks.push({ id: uuid(), start: new Date().toISOString() })
+    if (kind === 'lunch' && rec.breaks.some((b) => b.kind === 'lunch')) {
+      throw new Error('Lunch already taken today')
+    }
+    rec.breaks.push({ id: uuid(), start: new Date().toISOString(), kind })
     rec.isOnBreak = true
     updated = { ...rec }
   })

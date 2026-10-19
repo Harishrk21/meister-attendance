@@ -136,11 +136,11 @@ export function useTimeTracker() {
   )
 
   const startBreak = useCallback(
-    () =>
+    (kind: 'break' | 'lunch' = 'break') =>
       run(async () => {
         if (!session) return
-        await attendanceService.startBreak(session.employeeId)
-        toast('Break started')
+        await attendanceService.startBreak(session.employeeId, kind)
+        toast(kind === 'lunch' ? 'Lunch started' : 'Break started')
         postToHost('break-start')
       }),
     [run, session]

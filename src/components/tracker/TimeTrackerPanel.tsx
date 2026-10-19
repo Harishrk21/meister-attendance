@@ -173,7 +173,7 @@ export function TimeTrackerPanel({ compact = false }: { compact?: boolean }) {
             <button
               type="button"
               disabled={busy}
-              onClick={tracker.startBreak}
+              onClick={() => void tracker.startBreak('break')}
               className="flex h-12 items-center justify-center gap-2 rounded-xl border-2 border-amber-400 font-semibold text-amber-600 transition-colors hover:bg-amber-50 disabled:opacity-60 dark:hover:bg-amber-500/10"
             >
               <Coffee className="h-4 w-4" /> Break

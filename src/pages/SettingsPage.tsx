@@ -297,13 +297,44 @@ export function SettingsPage() {
               onChange={(e) => setSettings({ ...settings, overtimeAfterHours: Number(e.target.value) })}
             />
           </div>
-          <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2">
-            <Label>Require note for early leave</Label>
+          <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2 sm:col-span-2">
+            <div>
+              <Label>Require note for early leave</Label>
+              <p className="mt-0.5 text-[11px] text-ink-muted">
+                If an employee clocks out before their shift end time, they must enter a reason.
+              </p>
+            </div>
             <Switch
               checked={settings.requireNoteForEarlyLeave}
               onCheckedChange={(v) => setSettings({ ...settings, requireNoteForEarlyLeave: v })}
             />
           </div>
+          <div className="space-y-1">
+            <Label>Short break allowance (minutes)</Label>
+            <Input
+              type="number"
+              min={5}
+              max={180}
+              value={settings.maxBreakMinutes ?? 20}
+              onChange={(e) => setSettings({ ...settings, maxBreakMinutes: Number(e.target.value) })}
+            />
+            <p className="text-[11px] text-ink-muted">Shown on the time clock (e.g. 20).</p>
+          </div>
+          <div className="space-y-1">
+            <Label>Lunch allowance (minutes)</Label>
+            <Input
+              type="number"
+              min={10}
+              max={180}
+              value={settings.maxLunchMinutes ?? 30}
+              onChange={(e) => setSettings({ ...settings, maxLunchMinutes: Number(e.target.value) })}
+            />
+            <p className="text-[11px] text-ink-muted">One lunch per day (e.g. 30).</p>
+          </div>
+          <p className="sm:col-span-2 text-xs text-ink-muted">
+            Shift start/end times are managed under <strong>Shifts &amp; holidays</strong>. Early leave
+            is measured against each employee&apos;s assigned shift.
+          </p>
         </CardContent>
       </Card>
 

@@ -186,6 +186,7 @@ export async function attendanceRoutes(app: FastifyInstance) {
   })
 
   app.post('/v1/attendance/breaks/start', async (req) => {
+    const body = parse(z.object({ kind: z.enum(['break', 'lunch']).default('break') }), req.body ?? {})
     const { tenantId, employeeId } = req.auth
     const id = await withTx(async (conn) => {
       const rules = await loadRules(conn, tenantId)
@@ -198,12 +199,20 @@ export async function attendanceRoutes(app: FastifyInstance) {
       )
       if (!rec) throw conflict('Clock in first')
       if (rec.is_on_break) throw conflict('Already on break')
-      await exec(conn, 'INSERT INTO attendance_breaks (id, tenant_id, attendance_id, start_at) VALUES (?, ?, ?, ?)', [
-        randomUUID(),
-        tenantId,
-        rec.id,
-        new Date(),
-      ])
+      if (body.kind === 'lunch') {
+        const priorLunch = await one(
+          conn,
+          `SELECT 1 FROM attendance_breaks
+            WHERE attendance_id = ? AND kind = 'lunch' LIMIT 1`,
+          [rec.id]
+        )
+        if (priorLunch) throw conflict('Lunch already taken today')
+      }
+      await exec(
+        conn,
+        'INSERT INTO attendance_breaks (id, tenant_id, attendance_id, kind, start_at) VALUES (?, ?, ?, ?, ?)',
+        [randomUUID(), tenantId, rec.id, body.kind, new Date()]
+      )
       await exec(conn, 'UPDATE attendance_records SET is_on_break = 1 WHERE id = ?', [rec.id])
       return rec.id
     })

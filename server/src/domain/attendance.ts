@@ -28,6 +28,7 @@ export interface BreakRow {
   attendance_id: string
   start_at: Date
   end_at: Date | null
+  kind?: 'break' | 'lunch'
 }
 
 export const SELECT_ATTENDANCE = `
@@ -58,7 +59,12 @@ export function toAttendanceDto(r: AttendanceRow, breaks: BreakRow[], now = new 
     employeeId: r.employee_id,
     clockIn: iso(r.clock_in_at),
     clockOut: iso(r.clock_out_at),
-    breaks: breaks.map((b) => ({ id: b.id, start: b.start_at.toISOString(), end: iso(b.end_at) })),
+    breaks: breaks.map((b) => ({
+      id: b.id,
+      start: b.start_at.toISOString(),
+      end: iso(b.end_at),
+      kind: b.kind === 'lunch' ? 'lunch' : 'break',
+    })),
     totalWorkMinutes: totalWork,
     totalBreakMinutes: totalBreak,
     status: r.status,
@@ -88,7 +94,7 @@ export async function withBreaks(db: Db, records: AttendanceRow[]): Promise<Atte
     const ids = records.slice(i, i + BREAK_CHUNK).map((r) => r.id)
     const breaks = await rows<BreakRow>(
       db,
-      'SELECT id, attendance_id, start_at, end_at FROM attendance_breaks WHERE attendance_id IN (?) ORDER BY start_at',
+      'SELECT id, attendance_id, start_at, end_at, kind FROM attendance_breaks WHERE attendance_id IN (?) ORDER BY start_at',
       [ids]
     )
     for (const b of breaks) {

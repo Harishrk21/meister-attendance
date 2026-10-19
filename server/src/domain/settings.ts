@@ -8,6 +8,8 @@ export interface TenantRules {
   halfDayThresholdMinutes: number
   overtimeAfterMinutes: number
   requireNoteForEarlyLeave: boolean
+  maxBreakMinutes: number
+  maxLunchMinutes: number
 }
 
 interface SettingsRow {
@@ -27,6 +29,8 @@ interface SettingsRow {
   overtime_after_hours: number
   require_note_for_early_leave: number
   geofence_enabled: number
+  max_break_minutes: number
+  max_lunch_minutes: number
   activities_json: string[] | null
   employee_code_prefix: string | null
   setup_completed_at: Date | null
@@ -53,6 +57,8 @@ export async function loadRules(db: Db, tenantId: string): Promise<TenantRules> 
     halfDayThresholdMinutes: Math.round(s.half_day_threshold_hours * 60),
     overtimeAfterMinutes: Math.round(s.overtime_after_hours * 60),
     requireNoteForEarlyLeave: !!s.require_note_for_early_leave,
+    maxBreakMinutes: s.max_break_minutes || 20,
+    maxLunchMinutes: s.max_lunch_minutes || 30,
   }
 }
 
@@ -89,6 +95,8 @@ export async function loadSettingsDto(db: Db, tenantId: string): Promise<Setting
     geofenceLat: geoBranch?.geofence_lat != null ? Number(geoBranch.geofence_lat) : null,
     geofenceLng: geoBranch?.geofence_lng != null ? Number(geoBranch.geofence_lng) : null,
     geofenceRadiusM: geoBranch?.geofence_radius_m ?? 10,
+    maxBreakMinutes: s.max_break_minutes || 20,
+    maxLunchMinutes: s.max_lunch_minutes || 30,
     timezone: s.timezone,
     logoUrl: opt(s.logo_url),
     primaryColor: opt(s.primary_color),
