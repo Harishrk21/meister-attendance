@@ -196,6 +196,10 @@ export interface CompanySettings {
   halfDayThresholdHours: number
   overtimeAfterHours: number
   requireNoteForEarlyLeave: boolean
+  geofenceEnabled?: boolean
+  geofenceLat?: number | null
+  geofenceLng?: number | null
+  geofenceRadiusM?: number
   activities?: string[]
   timezone?: string
   logoUrl?: string

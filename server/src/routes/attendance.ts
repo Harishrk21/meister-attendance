@@ -17,6 +17,7 @@ import {
   type BreakRow,
 } from '../domain/attendance.js'
 import { audit } from '../domain/notify.js'
+import { assertWithinGeofence, loadGeofenceForEmployee } from '../domain/geofence.js'
 import { loadRules } from '../domain/settings.js'
 import { hhmmToMinutes, localDate, localMinutes } from '../time.js'
 
@@ -96,6 +97,9 @@ export async function attendanceRoutes(app: FastifyInstance) {
       const now = new Date()
       const date = localDate(now, rules.timezone)
       const shift = await loadEmployeeShift(conn, tenantId, employeeId)
+
+      const fence = await loadGeofenceForEmployee(conn, tenantId, employeeId)
+      if (fence) assertWithinGeofence(fence, body.location)
 
       const existing = await one<{ id: string; clock_in_at: Date | null; clock_out_at: Date | null; status: string }>(
         conn,

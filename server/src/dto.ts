@@ -183,6 +183,11 @@ export interface SettingsDto {
   halfDayThresholdHours: number
   overtimeAfterHours: number
   requireNoteForEarlyLeave: boolean
+  /** When true, clock-in must be within office radius (see geofence* fields). */
+  geofenceEnabled: boolean
+  geofenceLat?: number | null
+  geofenceLng?: number | null
+  geofenceRadiusM?: number
   timezone: string
   logoUrl?: string
   primaryColor?: string

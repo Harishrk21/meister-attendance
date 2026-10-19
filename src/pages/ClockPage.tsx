@@ -23,7 +23,7 @@ import { Textarea } from '@/components/ui/input'
 import { Label } from '@/components/ui/card'
 import * as attendanceService from '@/lib/services/attendance'
 import type { AttendanceRecord, WorkMode } from '@/types'
-import { captureLocation } from '@/lib/geo'
+import { captureLocation, GeoError } from '@/lib/geo'
 import { formatMinutes, cn, parseTimeToMinutes } from '@/lib/utils'
 import { DayTimeline } from '@/components/attendance/DayTimeline'
 
@@ -149,7 +149,8 @@ export function ClockPage() {
     if (!session) return
     setBusy(true)
     try {
-      const location = await captureLocation()
+      const geofenceRequired = !!data?.settings.geofenceEnabled
+      const location = await captureLocation({ required: geofenceRequired })
       setLocBadge(!!location)
       const r = await attendanceService.clockIn({
         employeeId: session.employeeId,
@@ -162,7 +163,7 @@ export function ClockPage() {
       bump()
       toast.success(r.status === 'Late' ? '⏰ Clocked in — marked Late' : '✅ Clocked in successfully!')
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Clock-in failed')
+      toast.error(e instanceof GeoError || e instanceof Error ? e.message : 'Clock-in failed')
     } finally {
       setBusy(false)
     }
@@ -507,7 +508,9 @@ export function ClockPage() {
         {/* Geo note */}
         <p className="flex items-center gap-2 text-center text-xs text-ink-muted">
           <MapPin className="h-3.5 w-3.5 shrink-0" />
-          Location is optional — clock-in never blocks if GPS is denied.
+          {data?.settings.geofenceEnabled
+            ? `Office GPS check is on — you must be within ${data.settings.geofenceRadiusM ?? 10} m to clock in.`
+            : 'Location is optional — clock-in does not require GPS for this company.'}
           <Wifi className="h-3.5 w-3.5 shrink-0" />
         </p>
       </div>

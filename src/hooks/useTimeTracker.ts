@@ -5,7 +5,7 @@ import { useAuth } from '@/context/AuthContext'
 import { useData } from '@/context/DataContext'
 import * as attendanceService from '@/lib/services/attendance'
 import { postToHost } from '@/lib/embed'
-import { captureLocation } from '@/lib/geo'
+import { captureLocation, GeoError } from '@/lib/geo'
 import { parseTimeToMinutes } from '@/lib/utils'
 import { DEFAULT_ACTIVITIES, type AppData, type AttendanceRecord, type WorkMode } from '@/types'
 
@@ -95,11 +95,18 @@ export function useTimeTracker() {
     [bump]
   )
 
+  const geofenceRequired = !!data?.settings.geofenceEnabled
+
   const clockIn = useCallback(
     (opts: { workMode: WorkMode; activity?: string; notes?: string }) =>
       run(async () => {
         if (!session) return
-        const location = await captureLocation()
+        let location
+        try {
+          location = await captureLocation({ required: geofenceRequired })
+        } catch (e) {
+          throw e instanceof GeoError ? e : new Error('Could not read GPS location')
+        }
         const r = await attendanceService.clockIn({
           employeeId: session.employeeId,
           branch: session.branch,
@@ -111,7 +118,7 @@ export function useTimeTracker() {
         toast.success(r.status === 'Late' ? 'Clocked in — marked Late' : 'Clocked in')
         postToHost('clock-in', { at: r.clockIn, status: r.status, activity: r.activity })
       }),
-    [run, session]
+    [run, session, geofenceRequired]
   )
 
   const clockOut = useCallback(

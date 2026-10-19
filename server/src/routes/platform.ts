@@ -10,6 +10,7 @@ import { signPlatformToken } from '../auth/tokens.js'
 import { createEmployeeWithUser } from '../domain/employees.js'
 import { createInvite } from '../domain/invites.js'
 import { audit } from '../domain/notify.js'
+import { applyTenantGeofence, loadTenantGeofenceSummary } from '../domain/geofence.js'
 import { assertSeatAvailable, provisionTenant, RESERVED_SLUGS } from '../domain/tenants.js'
 import { isValidTimeZone, localDate } from '../time.js'
 import { CodePrefix, HexColor, LogoUrl } from './settings.js'
@@ -43,6 +44,17 @@ const CreateTenant = z.object({
   logoUrl: LogoUrl.optional(),
   primaryColor: HexColor.optional(),
   admin: Person,
+  geofenceEnabled: z.boolean().optional(),
+  geofenceLat: z.number().min(-90).max(90).nullable().optional(),
+  geofenceLng: z.number().min(-180).max(180).nullable().optional(),
+  geofenceRadiusM: z.number().int().min(5).max(5000).optional(),
+})
+
+const GeofenceBody = z.object({
+  enabled: z.boolean(),
+  lat: z.number().min(-90).max(90).nullable().optional(),
+  lng: z.number().min(-180).max(180).nullable().optional(),
+  radiusM: z.number().int().min(5).max(5000).optional(),
 })
 
 const PatchTenant = z
@@ -158,8 +170,10 @@ async function loadTenantDetail(db: Db, id: string) {
     'SELECT id, issuer, auto_provision, sync_role, default_role, allowed_origins, is_enabled, created_at FROM sso_configs WHERE tenant_id = ? ORDER BY created_at',
     [id]
   )
+  const geofence = await loadTenantGeofenceSummary(db, id)
   return {
     ...toTenantSummary(row),
+    geofence,
     admins: admins.map((a) => ({
       userId: a.user_id,
       name: a.full_name,
@@ -267,6 +281,14 @@ export async function platformRoutes(app: FastifyInstance) {
         if (isDuplicateKey(err)) throw conflict('That workspace name is already taken', 'SLUG_TAKEN')
         throw err
       })
+      if (body.geofenceEnabled || (body.geofenceLat != null && body.geofenceLng != null)) {
+        await applyTenantGeofence(conn, created.tenantId, {
+          enabled: !!body.geofenceEnabled,
+          lat: body.geofenceLat,
+          lng: body.geofenceLng,
+          radiusM: body.geofenceRadiusM ?? 10,
+        })
+      }
       const link = await createInvite(conn, {
         tenantId: created.tenantId,
         userId: created.adminUserId,
@@ -276,6 +298,26 @@ export async function platformRoutes(app: FastifyInstance) {
       return { tenantId: created.tenantId, invite: link }
     })
     return { tenant: await loadTenantDetail(getPool(), tenantId), invite }
+  })
+
+  app.put('/v1/platform/tenants/:id/geofence', async (req) => {
+    const { id } = req.params as { id: string }
+    const body = parse(GeofenceBody, req.body)
+    await withTx(async (conn) => {
+      const exists = await one(conn, 'SELECT 1 FROM tenants WHERE id = ? FOR UPDATE', [id])
+      if (!exists) throw notFound('Client not found')
+      await applyTenantGeofence(conn, id, {
+        enabled: body.enabled,
+        lat: body.lat,
+        lng: body.lng,
+        radiusM: body.radiusM,
+      })
+      await platformAudit(conn, req, id, 'tenant.geofence', body)
+    })
+    return {
+      tenant: await loadTenantDetail(getPool(), id),
+      geofence: await loadTenantGeofenceSummary(getPool(), id),
+    }
   })
 
   app.patch('/v1/platform/tenants/:id', async (req) => {

@@ -26,6 +26,7 @@ interface SettingsRow {
   half_day_threshold_hours: number
   overtime_after_hours: number
   require_note_for_early_leave: number
+  geofence_enabled: number
   activities_json: string[] | null
   employee_code_prefix: string | null
   setup_completed_at: Date | null
@@ -62,6 +63,16 @@ export async function loadSettingsDto(db: Db, tenantId: string): Promise<Setting
     'SELECT name FROM branches WHERE tenant_id = ? AND is_active = 1 ORDER BY name',
     [tenantId]
   )
+  const geoBranch = await one<{
+    geofence_lat: number | null
+    geofence_lng: number | null
+    geofence_radius_m: number | null
+  }>(
+    db,
+    `SELECT geofence_lat, geofence_lng, geofence_radius_m
+       FROM branches WHERE tenant_id = ? AND is_active = 1 ORDER BY created_at LIMIT 1`,
+    [tenantId]
+  )
   return {
     name: s.display_name,
     tagline: s.tagline ?? '',
@@ -74,6 +85,10 @@ export async function loadSettingsDto(db: Db, tenantId: string): Promise<Setting
     halfDayThresholdHours: s.half_day_threshold_hours,
     overtimeAfterHours: s.overtime_after_hours,
     requireNoteForEarlyLeave: !!s.require_note_for_early_leave,
+    geofenceEnabled: !!s.geofence_enabled,
+    geofenceLat: geoBranch?.geofence_lat != null ? Number(geoBranch.geofence_lat) : null,
+    geofenceLng: geoBranch?.geofence_lng != null ? Number(geoBranch.geofence_lng) : null,
+    geofenceRadiusM: geoBranch?.geofence_radius_m ?? 10,
     timezone: s.timezone,
     logoUrl: opt(s.logo_url),
     primaryColor: opt(s.primary_color),
