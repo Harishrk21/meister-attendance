@@ -135,7 +135,13 @@ export async function ssoRoutes(app: FastifyInstance) {
             await exec(conn, 'UPDATE users SET role = ? WHERE id = ?', [claimedRole, existing.id])
             await exec(conn, 'UPDATE employees SET role = ? WHERE id = ?', [claimedRole, existing.employee_id])
           }
+          const claimedName = str(claims.name)
+          if (claimedName) {
+            await exec(conn, 'UPDATE employees SET full_name = ? WHERE id = ?', [claimedName, existing.employee_id])
+          }
           if (!existing.external_ref && claims.sub) {
+            await exec(conn, 'UPDATE employees SET external_ref = ? WHERE id = ?', [claims.sub, existing.employee_id])
+          } else if (claims.sub && existing.external_ref !== claims.sub) {
             await exec(conn, 'UPDATE employees SET external_ref = ? WHERE id = ?', [claims.sub, existing.employee_id])
           }
           return existing.id
