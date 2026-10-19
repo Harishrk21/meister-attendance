@@ -159,9 +159,18 @@ export async function attendanceRoutes(app: FastifyInstance) {
       if (!rec) throw notFound('No active clock-in found')
       if (rec.is_on_break) throw conflict('End your break before clocking out')
 
+      // Guard against accidental double-tap (clock-in then clock-out a few seconds later).
+      const secondsSinceIn = Math.floor((now.getTime() - new Date(rec.clock_in_at).getTime()) / 1000)
+      if (secondsSinceIn < 60) {
+        throw badRequest(
+          'You just clocked in. Wait at least one minute before clocking out (or ask an admin to reset today’s punch).',
+          'CLOCK_OUT_TOO_SOON'
+        )
+      }
+
       const shift = await loadEmployeeShift(conn, tenantId, employeeId)
       const note = body.earlyLeaveNote?.trim()
-      const early = localMinutes(now, rules.timezone) < hhmmToMinutes(shift.end)
+      const early = localMinutes(now, rules.timezone) < hhmmToMinutes(String(shift.end).slice(0, 5))
       if (early && rules.requireNoteForEarlyLeave && !note) {
         throw badRequest('Early leave note required before shift end', 'EARLY_LEAVE_NOTE_REQUIRED')
       }

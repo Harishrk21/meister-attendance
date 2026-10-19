@@ -141,11 +141,19 @@ export async function loadEmployeeShift(db: Db, tenantId: string, employeeId: st
     [tenantId, employeeId]
   )
   if (!row) throw notFound('Employee not found')
+  const asHhmm = (v: string | Date | null | undefined, fallback: string) => {
+    if (v == null) return fallback
+    if (typeof v === 'string') return v.slice(0, 5)
+    // mysql2 may return TIME as Date in some configs
+    const h = v.getUTCHours()
+    const m = v.getUTCMinutes()
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+  }
   return {
     employeeId: row.id,
     branchId: row.branch_id,
-    start: row.start_time ?? '09:00',
-    end: row.end_time ?? '18:00',
+    start: asHhmm(row.start_time, '09:00'),
+    end: asHhmm(row.end_time, '18:00'),
     graceMinutes: row.grace_minutes ?? 0,
   }
 }

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { format, parseISO } from 'date-fns'
 import { Briefcase, Coffee, Home, Loader2, LogIn, LogOut, MapPin, Play, Square, StickyNote, Truck } from 'lucide-react'
+import { toast } from 'sonner'
 import { formatClock, useTimeTracker } from '@/hooks/useTimeTracker'
 import { mapsUrl } from '@/lib/geo'
 import { cn, formatMinutes } from '@/lib/utils'
@@ -41,6 +42,16 @@ export function TimeTrackerPanel({ compact = false }: { compact?: boolean }) {
   async function handleClockOut() {
     if (needsEarlyNote && !earlyNote.trim()) {
       setAskEarly(true)
+      return
+    }
+    if (record?.clockIn) {
+      const secs = Math.floor((Date.now() - new Date(record.clockIn).getTime()) / 1000)
+      if (secs < 60) {
+        toast.error('You just clocked in. Wait at least one minute before clocking out.')
+        return
+      }
+    }
+    if (!window.confirm(needsEarlyNote ? 'Clock out early and end your day?' : 'Clock out and end your day?')) {
       return
     }
     const ok = await tracker.clockOut(earlyNote)

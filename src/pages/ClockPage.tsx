@@ -146,6 +146,18 @@ export function ClockPage() {
       toast.error('Enter an early leave reason — you are clocking out before shift end')
       return
     }
+    if (record?.clockIn) {
+      const secs = Math.floor((Date.now() - parseISO(record.clockIn).getTime()) / 1000)
+      if (secs < 60) {
+        toast.error('You just clocked in. Wait at least one minute before clocking out.')
+        return
+      }
+    }
+    const confirmMsg =
+      requireEarly && beforeShiftEnd
+        ? 'Clock out early? This will end your day before shift end.'
+        : 'Clock out and end your day?'
+    if (!window.confirm(confirmMsg)) return
     setBusy(true)
     try {
       const r = await attendanceService.clockOut({
